@@ -8,6 +8,12 @@
 
 #include <pcl/visualization/pcl_visualizer.h>
 
+#include <pcl/kdtree/kdtree_flann.h>
+
+#include <pcl/features/normal_3d.h>
+
+#include <pcl/surface/gp3.h>
+
 const int WIDTH = 100;
 const int HEIGHT = 100;
 
@@ -36,6 +42,50 @@ void add_new_data(PointCloud::Ptr in_cloud)
     *in_cloud = std::move(*out_cloud);
 }
 
+pcl::PolygonMesh fit_surface(const PointCloud::Ptr in_cloud)
+{
+    pcl::NormalEstimation<PointT, pcl::Normal> n;
+    pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal>);
+    pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>);
+    tree->setInputCloud (in_cloud);
+    n.setInputCloud (in_cloud);
+    n.setSearchMethod (tree);
+    n.setKSearch (20);
+    n.compute (*normals);
+    //* normals should not contain the point normals + surface curvatures
+
+    // Concatenate the XYZ and normal fields*
+    pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud_with_normals (new pcl::PointCloud<pcl::PointXYZRGBNormal>);
+    pcl::concatenateFields (*in_cloud, *normals, *cloud_with_normals);
+    //* cloud_with_normals = cloud + normals
+
+    // Create search tree*
+    pcl::search::KdTree<pcl::PointXYZRGBNormal>::Ptr tree2 (new pcl::search::KdTree<pcl::PointXYZRGBNormal>);
+    tree2->setInputCloud (cloud_with_normals);
+
+    // Initialize objects
+    pcl::GreedyProjectionTriangulation<pcl::PointXYZRGBNormal> gp3;
+    pcl::PolygonMesh triangles;
+
+    // Set the maximum distance between connected points (maximum edge length)
+    gp3.setSearchRadius (5);
+
+    // Set typical values for the parameters
+    gp3.setMu (2.5);
+    gp3.setMaximumNearestNeighbors (9);
+    gp3.setMaximumSurfaceAngle(M_PI/2); // 45 degrees
+    gp3.setMinimumAngle(M_PI/18); // 10 degrees
+    gp3.setMaximumAngle(2*M_PI/3); // 120 degrees
+    gp3.setNormalConsistency(false);
+
+    // Get result
+    gp3.setInputCloud (cloud_with_normals);
+    gp3.setSearchMethod (tree2);
+    gp3.reconstruct (triangles);
+
+    return triangles;
+}
+
 int main(int argc, char** argv)
 {
     using namespace std::chrono_literals;
@@ -52,16 +102,19 @@ int main(int argc, char** argv)
         }
     }
 
+    pcl::PolygonMesh mesh = fit_surface(sheet);
+
     pcl::visualization::PCLVisualizer::Ptr viewer {new pcl::visualization::PCLVisualizer{"Cloud Viewer"}};
     viewer->setBackgroundColor(0, 0, 0);
     viewer->addPointCloud<PointT>(sheet, "sheet");
+    viewer->addPolygonMesh(mesh);
     viewer->addCoordinateSystem(1.0);
     viewer->initCameraParameters();
 
     while(!viewer->wasStopped())
     {
-        add_new_data(sheet);
-        viewer->updatePointCloud(sheet, "sheet");
+        // add_new_data(sheet);
+        // viewer->updatePointCloud(sheet, "sheet");
         viewer->spinOnce(1000);
     }
 
