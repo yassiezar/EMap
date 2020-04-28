@@ -23,16 +23,17 @@ Eigen::MatrixXf Sheet::get_model()
         for(auto node : row)
         {
             std::vector<int> connections = node.get_connections();
+            // A(cur_row, node.get_index() % (sheet_width_*sheet_height_)) = 0.5*k_;
             for(auto c : connections)
             {
                 if(c > -1)
                 {
                     NodeCoord coord2 = get_node(c);
-                    A(cur_row, c % (sheet_width_*sheet_height_)) = 0.5*k_;
+                    A(cur_row, node.get_index() % (sheet_width_*sheet_height_)) += 0.5*k_;
                 }
             }
             ++cur_row;
-            std::cout << A << "\n" << std::endl;
+            // std::cout << A << "\n" << std::endl;
         }
     }
 
