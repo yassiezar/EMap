@@ -14,8 +14,10 @@
 
 #include <pcl/surface/gp3.h>
 
-const int WIDTH = 100;
-const int HEIGHT = 100;
+#include <sheet.hpp>
+
+const int WIDTH = 3;
+const int HEIGHT = 3;
 
 using PointT = pcl::PointXYZRGB;
 using PointCloud = pcl::PointCloud<PointT>;
@@ -88,35 +90,48 @@ pcl::PolygonMesh fit_surface(const PointCloud::Ptr in_cloud)
 
 int main(int argc, char** argv)
 {
-    using namespace std::chrono_literals;
-
-    PointT zero{255, 0, 0};
-    PointCloud::Ptr sheet {new PointCloud{WIDTH, HEIGHT, zero}};
-    for(int i = 0; i < WIDTH; ++i)
+    Sheet sheet{WIDTH, HEIGHT};
+    for(int i = 0; i < HEIGHT; ++i)
     {
-        for(int j = 0; j < HEIGHT; ++j)
+        for(int j = 0; j < WIDTH; ++j)
         {
-            sheet->points[j*WIDTH + i].x = i;
-            sheet->points[j*WIDTH + i].y = j;
-            sheet->points[j*WIDTH + i].z = 0;
+            if(i != 0) sheet.update_connection(i*HEIGHT + j, (i - 1)*HEIGHT + j);
+            if(j != 0) sheet.update_connection(i*HEIGHT + j, i*HEIGHT + j - 1);
+            if(i != HEIGHT - 1) sheet.update_connection(i*HEIGHT + j, (i + 1)*HEIGHT + j);
+            if(j != WIDTH - 1) sheet.update_connection(i*HEIGHT + j, i*HEIGHT + j + 1);
         }
     }
 
-    pcl::PolygonMesh mesh = fit_surface(sheet);
+    Eigen::MatrixXf model = sheet.get_model();
+    // using namespace std::chrono_literals;
 
-    pcl::visualization::PCLVisualizer::Ptr viewer {new pcl::visualization::PCLVisualizer{"Cloud Viewer"}};
-    viewer->setBackgroundColor(0, 0, 0);
-    viewer->addPointCloud<PointT>(sheet, "sheet");
-    viewer->addPolygonMesh(mesh);
-    viewer->addCoordinateSystem(1.0);
-    viewer->initCameraParameters();
+    // PointT zero{255, 0, 0};
+    // PointCloud::Ptr sheet {new PointCloud{WIDTH, HEIGHT, zero}};
+    // for(int i = 0; i < WIDTH; ++i)
+    // {
+    //     for(int j = 0; j < HEIGHT; ++j)
+    //     {
+    //         sheet->points[j*WIDTH + i].x = i;
+    //         sheet->points[j*WIDTH + i].y = j;
+    //         sheet->points[j*WIDTH + i].z = 0;
+    //     }
+    // }
 
-    while(!viewer->wasStopped())
-    {
-        // add_new_data(sheet);
-        // viewer->updatePointCloud(sheet, "sheet");
-        viewer->spinOnce(1000);
-    }
+    // pcl::PolygonMesh mesh = fit_surface(sheet);
+
+    // pcl::visualization::PCLVisualizer::Ptr viewer {new pcl::visualization::PCLVisualizer{"Cloud Viewer"}};
+    // viewer->setBackgroundColor(0, 0, 0);
+    // viewer->addPointCloud<PointT>(sheet, "sheet");
+    // viewer->addPolygonMesh(mesh);
+    // viewer->addCoordinateSystem(1.0);
+    // viewer->initCameraParameters();
+
+    // while(!viewer->wasStopped())
+    // {
+    //     add_new_data(sheet);
+    //     viewer->updatePointCloud(sheet, "sheet");
+    //     viewer->spinOnce(1000);
+    // }
 
     return 0;
 }
