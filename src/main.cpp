@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cassert>
 #include <stdexcept>
+#include <ctime>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -21,6 +22,7 @@
 #include <pcl/surface/gp3.h>
 
 #include <Eigen/Sparse>
+#include <Eigen/IterativeLinearSolvers>
 
 #include <sheet.hpp>
 
@@ -40,65 +42,60 @@ std::vector<float> get_point_displacements(const PointCloud::Ptr input, const Po
                                                 Eigen::SparseMatrix<float> A, 
                                                 std::vector<int> ind, std::vector<float>dists)
 {
+    double duration;
+    std::clock_t start = std::clock();
     //  assert(A == A.transpose());
     //  assert(A.determinant() != 0);
-     int num_iter = 500;
-     float epsilon = pow(10, -4);
+    int num_iter = 500;
+    float epsilon = pow(10, -4);
 
-     std::vector<float> d(HEIGHT*WIDTH);
+    std::vector<float> d(HEIGHT*WIDTH);
 
-     float k = 10.f;
+    float k = 10.f;
 
-     Eigen::Matrix<float, HEIGHT*WIDTH, 1> b = Eigen::Matrix<float, HEIGHT*WIDTH, 1>::Zero(HEIGHT*WIDTH, 1);
-    //  Eigen::SparseMatrix<float> b{HEIGHT*WIDTH, 1};
-    // for(auto i : ind)
+    Eigen::Matrix<float, HEIGHT*WIDTH, 1> b = Eigen::Matrix<float, HEIGHT*WIDTH, 1>::Zero(HEIGHT*WIDTH, 1);
     for(int i = 0; i < dists.size(); ++i)
     {
-        // b.coeffRef(i, 0) = dists[i];
-        // b(i, 0) = dists[i];
         b(ind[i]) = dists[i]*0.5*k;
     }
     Eigen::Matrix<float, HEIGHT*WIDTH, 1> x;// = b;//Eigen::Matrix<float, HEIGHT*WIDTH, 1>::Zero(HEIGHT*WIDTH, 1);
+    x.setZero();
 
-    // std::cout << A.fullPivHouseholderQr().solve(b) << std::endl;
-    // x = A.fullPivHouseholderQr().solve(b);
+    Eigen::ConjugateGradient<Eigen::SparseMatrix<float>, Eigen::Upper|Eigen::Lower> solver;
+    solver.compute(A);
+    x = solver.solve(b);
 
-    // // A.makeCompressed();
-    // // b.makeCompressed();
+    // Eigen::Matrix<float, HEIGHT*WIDTH, 2> r = Eigen::Matrix<float, HEIGHT*WIDTH, 2>::Zero(HEIGHT*WIDTH, 2);
+    // r.col(0) = b - A*x;
+    // Eigen::Matrix<float, HEIGHT*WIDTH, 1> p = r.col(0);//b - A*x;
+    // float alpha = 0;
+    // float beta = 0;
 
-    Eigen::Matrix<float, HEIGHT*WIDTH, 2> r = Eigen::Matrix<float, HEIGHT*WIDTH, 2>::Zero(HEIGHT*WIDTH, 2);
-    r.col(0) = b - A*x;
-    Eigen::Matrix<float, HEIGHT*WIDTH, 1> p = r.col(0);//b - A*x;
-    float alpha = 0;
-    float beta = 0;
-
-    // // while(k < num_iter)     // Add error convergence criteria
-    // // for(int i = 0; i < x.cols()-1; ++i)
-    for(int i = 0; i < num_iter; ++i)
-    {
-        float alpha1 = (r.col(0).transpose()*r.col(0));
-        float alpha2 = (p.transpose()*A*p);
-        alpha = alpha1/alpha2;
-        // Eigen::Matrix<float, HEIGHT*HEIGHT, 1> tmp = x.col(i) + (alpha*p.col(i));
-        // auto tmp = p*alpha;
-        x += p*alpha;
-        // x = x + tmp;//alpha*p;
-        r.col(1) = r.col(0) - alpha*A*p;
-        float norm = r.col(1).squaredNorm();
-        if(norm < epsilon)
-        {
-            std::cout << "Converged in " << i << " iterations" << std::endl;
-            break;
-        }
-        float beta1 = (r.col(1).transpose()*r.col(1));
-        float beta2 = (r.col(0).transpose()*r.col(0));
-        beta = beta1/beta2;
-        p = r.col(1) + beta*p;
-        r.col(0) = r.col(1);
-    }
+    // for(int i = 0; i < num_iter; ++i)
+    // {
+    //     float alpha1 = (r.col(0).transpose()*r.col(0));
+    //     float alpha2 = (p.transpose()*A*p);
+    //     alpha = alpha1/alpha2;
+    //     x += p*alpha;
+    //     r.col(1) = r.col(0) - alpha*A*p;
+    //     float norm = r.col(1).squaredNorm();
+    //     if(norm < epsilon)
+    //     {
+    //         std::cout << "Converged in " << i << " iterations" << std::endl;
+    //         break;
+    //     }
+    //     float beta1 = (r.col(1).transpose()*r.col(1));
+    //     float beta2 = (r.col(0).transpose()*r.col(0));
+    //     beta = beta1/beta2;
+    //     p = r.col(1) + beta*p;
+    //     r.col(0) = r.col(1);
+    // }
 
     Eigen::VectorXf::Map(&d[0], x.size()) = x;
-    std::cout << x << std::endl;
+    // std::cout << x << std::endl;
+
+    duration = (std::clock() - start)/(double)CLOCKS_PER_SEC;
+    std::cout << duration << std::endl;
 
     return d;
 }
@@ -284,7 +281,7 @@ int main(int argc, char** argv)
         update_surface(cloud, mesh);
         viewer->updatePointCloud(cloud, "sheet");
         viewer->updatePolygonMesh(mesh, "mesh");
-        viewer->spinOnce(1000);
+        viewer->spinOnce(0);
     }
 
     return 0;
